@@ -1,9 +1,9 @@
 #include <WiFi.h>
 
-//const char* ssid = "VM3870323_RPT";
-//const char* password = "xdxjLgyyhaun5Wds";
-const char* ssid = "AndroidAP9244";
-const char* password = "wneu3093";
+const char* ssid = "VM3870323_RPT";
+const char* password = "xdxjLgyyhaun5Wds";
+//const char* ssid = "AndroidAP9244";
+//const char* password = "wneu3093";
 
 bool wifiConnecting = false;
 unsigned long lastConnectAttempt = 0;
