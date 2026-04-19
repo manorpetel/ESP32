@@ -4,10 +4,10 @@
 
 // ======== runtime feature flags ========
 const bool run_motors = true;
-const bool run_servos = false;
+const bool run_servos = true;
 const bool run_motors_esp32_output_writes = true;
 const bool run_servos_esp32_output_writes = true;
-const bool run_motors_debug_messages = true;
+const bool run_motors_debug_messages = false;
 const bool run_servos_debug_messages = false;
 
 // ======== input pins =====n
