@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-// Last edited 12-Apr-2026 , @home, moving proj to VS code PlatformIO
+// Last edited 11-May-2026 , @home, adjusting final settings (A&B motors switch, motors speed, motors dead zone, head speed,head dead zone , startup)
 
 // ======== runtime feature flags ========
 const bool run_motors = true;
@@ -18,12 +18,12 @@ const int head_servo_in = 36;               // VP
 
 // ======== output pins ========
 const int motors_stby_out = 26;
-const int motor_pwma_out = 23;
-const int motor_ain1_out = 25;
-const int motor_ain2_out = 27;
-const int motor_pwmb_out = 22;
-const int motor_bin1_out = 33;
-const int motor_bin2_out = 32;
+const int motor_pwma_out = 22;
+const int motor_ain1_out = 33;
+const int motor_ain2_out = 32;
+const int motor_pwmb_out = 23;
+const int motor_bin1_out = 25;
+const int motor_bin2_out = 27;
 const int arm_servo_out = 13;
 const int head_servo_out = 12;
 
@@ -32,7 +32,8 @@ const int pulseTimeout = 25000; // 25 ms
 const int inMin = 1118;
 const int inMax = 2000;
 const int outMin = 550;
-const int outMax = 2600;
+const int outMax_arm = 2600;
+const int outMax_head = 1300;
 const int pwmFreq = 50;
 const int pwmResolution = 16;
 const int armServoChannel = 0;
@@ -116,12 +117,16 @@ void loop() {
 }
 
 void configurePins() {
+  pinMode(motors_stby_out, OUTPUT);
+  if (run_motors_esp32_output_writes) {
+    digitalWrite(motors_stby_out, LOW);
+  }
+
   pinMode(motors_left_right_in, INPUT);
   pinMode(motors_forward_backward_in, INPUT);
   pinMode(arm_servo_in, INPUT);
   pinMode(head_servo_in, INPUT);
 
-  pinMode(motors_stby_out, OUTPUT);
   pinMode(motor_pwma_out, OUTPUT);
   pinMode(motor_ain1_out, OUTPUT);
   pinMode(motor_ain2_out, OUTPUT);
@@ -134,9 +139,7 @@ void configurePins() {
   ledcSetup(headServoChannel, pwmFreq, pwmResolution);
   ledcAttachPin(head_servo_out, headServoChannel);
 
-  if (run_motors_esp32_output_writes) {
-    digitalWrite(motors_stby_out, HIGH);
-  }
+
 }
 
 unsigned long readPulse(int pin) {
@@ -155,10 +158,20 @@ RCInputs readRcInputs() {
 ServoState computeServoState(unsigned long armPulse, unsigned long headPulse) {
   ServoState state;
 
+  const int headDeadZone = 40;     // adjust (µs around center)
+  const int center = 1559;
+
   state.armPulse = constrain(armPulse, inMin, inMax);
   state.headPulse = constrain(headPulse, inMin, inMax);
-  state.armMapped = map(state.armPulse, inMin, inMax, outMin, outMax);
-  state.headMapped = map(state.headPulse, inMin, inMax, outMin, outMax);
+
+  // --- DEAD ZONE FOR HEAD ---
+  if (abs(int(state.headPulse) - center) < headDeadZone) {
+    state.headPulse = center;
+  }
+  state.armPulse = constrain(armPulse, inMin, inMax);
+  state.headPulse = constrain(headPulse, inMin, inMax);
+  state.armMapped = map(state.armPulse, inMin, inMax, outMin, outMax_arm);
+  state.headMapped = map(state.headPulse, inMin, inMax, outMin, outMax_head);
   state.armDuty = (uint32_t(state.armMapped) * 65535UL) / 20000UL;
   state.headDuty = (uint32_t(state.headMapped) * 65535UL) / 20000UL;
 
@@ -173,10 +186,15 @@ void writeServoOutputs(const ServoState& state) {
 MotorState computeMotorState(unsigned long lrPulse, unsigned long fbPulse) {
   const int zeroLocation = 1500;
   const int minimusSpeed = 4;
+  const int fbDeadZone = 40; 
   MotorState state;
 
   state.stickFBspeed = int(fbPulse) - zeroLocation;
   state.stickLRspeed = int(lrPulse) - zeroLocation;
+  // --- FRONT/BACK DEAD ZONE ---
+  if (abs(state.stickFBspeed) < fbDeadZone) {
+    state.stickFBspeed = 0;
+  }
   int stickFBspeedSign = (state.stickFBspeed >= 0) ? 1 : -1;
   state.motorRspeed = constrain(state.stickFBspeed - 0.5f * state.stickLRspeed * stickFBspeedSign, -500, 500);
   state.motorLspeed = constrain(state.stickFBspeed + 0.5f * state.stickLRspeed * stickFBspeedSign, -500, 500);
@@ -190,12 +208,12 @@ MotorState computeMotorState(unsigned long lrPulse, unsigned long fbPulse) {
     state.motorA_mode = "Forward";
     state.ain1 = HIGH;
     state.ain2 = LOW;
-    state.pwmA = map(state.motorRspeed, 0, 500, 0, 255);
+    state.pwmA = map(state.motorRspeed, 0, 500, 0, 190);
   } else {
     state.motorA_mode = "Backward";
     state.ain1 = LOW;
     state.ain2 = HIGH;
-    state.pwmA = map(state.motorRspeed, 0, -500, 0, 255);
+    state.pwmA = map(state.motorRspeed, 0, -500, 0, 190);
   }
 
   if (abs(state.motorLspeed) < minimusSpeed) {
@@ -207,18 +225,19 @@ MotorState computeMotorState(unsigned long lrPulse, unsigned long fbPulse) {
     state.motorB_mode = "Forward";
     state.bin1 = HIGH;
     state.bin2 = LOW;
-    state.pwmB = map(state.motorLspeed, 0, 500, 0, 255);
+    state.pwmB = map(state.motorLspeed, 0, 500, 0, 190);
   } else {
     state.motorB_mode = "Backward";
     state.bin1 = LOW;
     state.bin2 = HIGH;
-    state.pwmB = map(state.motorLspeed, 0, -500, 0, 255);
+    state.pwmB = map(state.motorLspeed, 0, -500, 0, 190);
   }
 
   return state;
 }
 
 void writeMotorOutputs(const MotorState& state) {
+  digitalWrite(motors_stby_out, HIGH);
   digitalWrite(motor_ain1_out, state.ain1);
   digitalWrite(motor_ain2_out, state.ain2);
   analogWrite(motor_pwma_out, state.pwmA);
