@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-// Last edited 11-May-2026 , @home, adjusting final settings (A&B motors switch, motors speed, motors dead zone, head speed,head dead zone , startup)
+// Last edited 13-May-2026 , @home, adjusting head left spin , head dead zone, moving local variables into procs, adding 10 sec pause at startup.  
 
 // ======== runtime feature flags ========
 const bool run_motors = true;
@@ -27,15 +27,6 @@ const int motor_bin2_out = 27;
 const int arm_servo_out = 13;
 const int head_servo_out = 12;
 
-// ======== PWM configuration ========
-const int pulseTimeout = 25000; // 25 ms
-const int inMin = 1118;
-const int inMax = 2000;
-const int outMin = 550;
-const int outMax_arm = 2600;
-const int outMax_head = 1300;
-const int pwmFreq = 50;
-const int pwmResolution = 16;
 const int armServoChannel = 0;
 const int headServoChannel = 1;
 
@@ -117,10 +108,14 @@ void loop() {
 }
 
 void configurePins() {
+  static const int pwmFreq = 50;
+  static const int pwmResolution = 16;
+
   pinMode(motors_stby_out, OUTPUT);
   if (run_motors_esp32_output_writes) {
     digitalWrite(motors_stby_out, LOW);
   }
+  delay(10000);
 
   pinMode(motors_left_right_in, INPUT);
   pinMode(motors_forward_backward_in, INPUT);
@@ -143,6 +138,7 @@ void configurePins() {
 }
 
 unsigned long readPulse(int pin) {
+  static const int pulseTimeout = 25000; // 25 ms
   return pulseIn(pin, HIGH, pulseTimeout);
 }
 
@@ -158,20 +154,31 @@ RCInputs readRcInputs() {
 ServoState computeServoState(unsigned long armPulse, unsigned long headPulse) {
   ServoState state;
 
-  const int headDeadZone = 40;     // adjust (µs around center)
-  const int center = 1559;
+  static const int inMin = 1118;
+  static const int inMax = 2000;
+  static const int outMin_arm = 550;
+  static const int outMax_arm = 2600;
 
+  static const int center_head = 1559; // actual center pulse for head servo (measured at startup)
+  static const int headDeadZone = 40;     // adjust (µs around head center)
+  static const int head_speed_limit = 200; // max speed for head movement (µs per update) { out of +- 500 range }
+  static const int outMin_head = center_head - head_speed_limit;
+  static const int outMax_head = center_head + head_speed_limit;
+ 
+  // clamp RC input pulses to expected range
   state.armPulse = constrain(armPulse, inMin, inMax);
   state.headPulse = constrain(headPulse, inMin, inMax);
 
   // --- DEAD ZONE FOR HEAD ---
-  if (abs(int(state.headPulse) - center) < headDeadZone) {
-    state.headPulse = center;
+  if (abs(int(state.headPulse) - center_head) < headDeadZone) {
+    state.headPulse = center_head;
   }
-  state.armPulse = constrain(armPulse, inMin, inMax);
-  state.headPulse = constrain(headPulse, inMin, inMax);
-  state.armMapped = map(state.armPulse, inMin, inMax, outMin, outMax_arm);
-  state.headMapped = map(state.headPulse, inMin, inMax, outMin, outMax_head);
+
+  // map pulses to servo output range
+  state.armMapped = map(state.armPulse, inMin, inMax, outMin_arm, outMax_arm); 
+  state.headMapped = map(state.headPulse, inMin, inMax, outMin_head, outMax_head);
+  
+  // convert mapped values to duty cycle (0-65535 {16-bit resolution}, 20000us {50Hz frequency} )
   state.armDuty = (uint32_t(state.armMapped) * 65535UL) / 20000UL;
   state.headDuty = (uint32_t(state.headMapped) * 65535UL) / 20000UL;
 
