@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-// Last edited 13-May-2026 , @home, adjusting head left spin , head dead zone, moving local variables into procs, adding 10 sec pause at startup.  
+// Last edited 31-May-2026 , @home, adding sequence instead if readRC.  
 
 // ======== runtime feature flags ========
 const bool run_motors = true;
@@ -70,6 +70,13 @@ MotorState computeMotorState(unsigned long lrPulse, unsigned long fbPulse);
 void writeMotorOutputs(const MotorState& state);
 void printServoDebug(const RCInputs& inputs, const ServoState& state);
 void printMotorDebug(const RCInputs& inputs, const MotorState& state);
+void runSequence();
+void stopMotors();
+void moveForward(int speed);
+void moveBackward(int speed);
+void rotateLeftOnSpot(int speed);
+void setHeadPulse(int pulseUs);
+void setArmPulse(int pulseUs);
 
 void setup() {
   Serial.begin(115200);
@@ -77,6 +84,7 @@ void setup() {
 }
 
 void loop() {
+  if (0) {
   RCInputs inputs = readRcInputs();
   bool printedDebug = false;
 
@@ -105,6 +113,15 @@ void loop() {
   if (printedDebug) {
     delay(2500);
   }
+  } // end if 0 (RC control loop)
+  runSequence();
+
+  // prevent repeating forever
+  while (true) {
+    stopMotors();
+    delay(7000);
+  }
+
 }
 
 void configurePins() {
@@ -292,4 +309,128 @@ void printMotorDebug(const RCInputs& inputs, const MotorState& state) {
   Serial.println(state.pwmB);
   Serial.println();
   Serial.println("------------------------------------------------------------");
+}
+
+void stopMotors() {
+  MotorState state;
+
+  state.ain1 = LOW;
+  state.ain2 = LOW;
+  state.bin1 = LOW;
+  state.bin2 = LOW;
+  state.pwmA = 0;
+  state.pwmB = 0;
+
+  writeMotorOutputs(state);
+}
+
+void moveForward(int speed) {
+  MotorState state;
+
+  state.ain1 = HIGH;
+  state.ain2 = LOW;
+  state.bin1 = HIGH;
+  state.bin2 = LOW;
+
+  state.pwmA = speed;
+  state.pwmB = speed;
+
+  writeMotorOutputs(state);
+}
+
+void moveBackward(int speed) {
+  MotorState state;
+
+  state.ain1 = LOW;
+  state.ain2 = HIGH;
+  state.bin1 = LOW;
+  state.bin2 = HIGH;
+
+  state.pwmA = speed;
+  state.pwmB = speed;
+
+  writeMotorOutputs(state);
+}
+
+void rotateLeftOnSpot(int speed) {
+  MotorState state;
+
+  state.ain1 = HIGH;
+  state.ain2 = LOW;
+
+  state.bin1 = LOW;
+  state.bin2 = HIGH;
+
+  state.pwmA = speed;
+  state.pwmB = speed;
+
+  writeMotorOutputs(state);
+}
+
+void setHeadPulse(int pulseUs) {
+  uint32_t duty = (uint32_t(pulseUs) * 65535UL) / 20000UL;
+  ledcWrite(headServoChannel, duty);
+}
+
+void setArmPulse(int pulseUs) {
+  uint32_t duty = (uint32_t(pulseUs) * 65535UL) / 20000UL;
+  ledcWrite(armServoChannel, duty);
+}
+
+void runSequence() {
+
+  const int headCenter = 1559;
+
+  // quarter-speed head movement
+  const int headOffset = 50;
+
+  // arm positions (adjust experimentally)
+  const int armDown = 1000;
+  const int armUp   = 2200;
+
+  // ------------------------
+  // 1. forward half speed
+  // ------------------------
+  moveForward(95);      // half of your max ~190
+  delay(1000);
+  stopMotors();
+
+  // ------------------------
+  // 2. head right 0.5 sec
+  // ------------------------
+  setHeadPulse(headCenter + headOffset);
+  delay(500);
+
+  // ------------------------
+  // 3. head left 1 sec
+  // ------------------------
+  setHeadPulse(headCenter - headOffset);
+  delay(1000);
+
+  // ------------------------
+  // 4. head right back to center
+  // ------------------------
+  setHeadPulse(headCenter);
+  delay(500);
+
+  // ------------------------
+  // 5. arm up/down
+  // ------------------------
+  setArmPulse(armUp);
+  delay(1000);
+
+  setArmPulse(armDown);
+  delay(1000);
+
+  // rotate left on spot
+  rotateLeftOnSpot(95);
+  delay(2000);
+  stopMotors();
+
+  // ------------------------
+  // 6. backwards
+  // ------------------------
+  moveBackward(95);
+  delay(1000);
+  stopMotors();
 }
