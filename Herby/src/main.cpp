@@ -132,7 +132,7 @@ void configurePins() {
   if (run_motors_esp32_output_writes) {
     digitalWrite(motors_stby_out, LOW);
   }
-  delay(10000);
+  delay(1000);
 
   pinMode(motors_left_right_in, INPUT);
   pinMode(motors_forward_backward_in, INPUT);
@@ -380,6 +380,8 @@ void setArmPulse(int pulseUs) {
 void runSequence() {
 
   const int headCenter = 1559;
+  const int headLeft = 1118;  
+  const int headRight = 2000;
 
   // quarter-speed head movement
   const int headOffset = 50;
@@ -391,27 +393,28 @@ void runSequence() {
   // ------------------------
   // 1. forward half speed
   // ------------------------
-  moveForward(95);      // half of your max ~190
+  moveForward(95);      // power 0-190
   delay(1000);
   stopMotors();
 
   // ------------------------
   // 2. head right 0.5 sec
   // ------------------------
-  setHeadPulse(headCenter + headOffset);
-  delay(500);
+  //setHeadPulse(headCenter + headOffset);
+  //delay(1000);
 
   // ------------------------
   // 3. head left 1 sec
   // ------------------------
-  setHeadPulse(headCenter - headOffset);
+  //setHeadPulse(headCenter - headOffset);
+  setHeadPulse(headLeft);
   delay(1000);
 
   // ------------------------
   // 4. head right back to center
   // ------------------------
   setHeadPulse(headCenter);
-  delay(500);
+  delay(1000);
 
   // ------------------------
   // 5. arm up/down
