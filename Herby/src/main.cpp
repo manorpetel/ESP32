@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-// Last edited 31-May-2026 , @home, adding sequence instead if readRC.  
+// Last edited 10-Jun-2026 , @home, adding back readRC instead of sequence.  
 
 // ======== runtime feature flags ========
 const bool run_motors = true;
@@ -84,44 +84,46 @@ void setup() {
 }
 
 void loop() {
-  if (0) {
-  RCInputs inputs = readRcInputs();
-  bool printedDebug = false;
+  if (1) {
+    RCInputs inputs = readRcInputs();
+    bool printedDebug = false;
 
-  if (run_servos) {
-    ServoState servos = computeServoState(inputs.armServoPulse, inputs.headServoPulse);
-    if (run_servos_esp32_output_writes) {
-      writeServoOutputs(servos);
+    ServoState servos; // declare in outer scope so debug can access it
+    if (run_servos) {
+      servos = computeServoState(inputs.armServoPulse, inputs.headServoPulse);
+      if (run_servos_esp32_output_writes) {
+        writeServoOutputs(servos);
+      }
     }
+
     if (run_servos_debug_messages) {
       printServoDebug(inputs, servos);
       printedDebug = true;
     }
-  }
 
-  if (run_motors) {
-    MotorState motors = computeMotorState(inputs.motorsLeftRightPulse, inputs.motorsForwardBackPulse);
-    if (run_motors_esp32_output_writes) {
-      writeMotorOutputs(motors);
+    MotorState motors; // declare in outer scope so debug can access it
+    if (run_motors) {
+      motors = computeMotorState(inputs.motorsLeftRightPulse, inputs.motorsForwardBackPulse);
+      if (run_motors_esp32_output_writes) {
+        writeMotorOutputs(motors);
+      }
     }
     if (run_motors_debug_messages) {
       printMotorDebug(inputs, motors);
       printedDebug = true;
     }
-  }
 
-  if (printedDebug) {
-    delay(2500);
+    if (printedDebug) {
+      delay(2500);
+    }
+  } else {// end if 1 (RC control loop)
+    runSequence();
+    // prevent repeating forever
+    while (true) {
+      stopMotors();
+      delay(7000);
+    }
   }
-  } // end if 0 (RC control loop)
-  runSequence();
-
-  // prevent repeating forever
-  while (true) {
-    stopMotors();
-    delay(7000);
-  }
-
 }
 
 void configurePins() {
