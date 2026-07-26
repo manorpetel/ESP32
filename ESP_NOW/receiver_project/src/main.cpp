@@ -2,17 +2,21 @@
 #include <WiFi.h>
 #include <esp_now.h>
 
-// Receiver project: upload this firmware to the board that should react to HIGH/LOW.
-// It expects messages from the sender board MAC below.
-constexpr uint8_t peerAddress[] = {0xFC, 0xE8, 0xC0, 0xE1, 0x85, 0xE0};
+constexpr uint8_t espNowChannel = 1;
 
 void OnDataRecv(const uint8_t *macAddr, const uint8_t *incomingData, int len) {
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+           macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+
   String message = "";
   for (int i = 0; i < len; i++) {
     message += (char)incomingData[i];
   }
 
-  Serial.print("Received: ");
+  Serial.print("Received from ");
+  Serial.print(macStr);
+  Serial.print(": ");
   Serial.println(message);
 
   if (message == "HIGH") {
@@ -27,7 +31,15 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
 
   Serial.begin(115200);
+  delay(1000);
+
   WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true);
+  WiFi.setSleep(false);
+  WiFi.setChannel(espNowChannel);
+
+  Serial.print("Receiver MAC: ");
+  Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW init failed");
@@ -35,16 +47,6 @@ void setup() {
   }
 
   esp_now_register_recv_cb(OnDataRecv);
-
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, peerAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add peer");
-    return;
-  }
 
   Serial.println("Receiver ready");
   Serial.println("Waiting for HIGH/LOW commands.");

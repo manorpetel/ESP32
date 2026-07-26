@@ -2,9 +2,9 @@
 #include <WiFi.h>
 #include <esp_now.h>
 
-// Sender project: upload this firmware to the board that should send HIGH/LOW.
-// It targets the receiver board MAC below.
-constexpr uint8_t peerAddress[] = {0xFC, 0xE8, 0xC0, 0xE0, 0xC7, 0xA4};
+// Use the broadcast address so the sender can reach the receiver without a hard-coded MAC mismatch.
+constexpr uint8_t peerAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+constexpr uint8_t espNowChannel = 1;
 
 void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
   char macStr[18];
@@ -18,7 +18,15 @@ void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);
+
   WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true);
+  WiFi.setSleep(false);
+  WiFi.setChannel(espNowChannel);
+
+  Serial.print("Sender MAC: ");
+  Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {
     Serial.println("ESP-NOW init failed");
@@ -29,7 +37,7 @@ void setup() {
 
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, peerAddress, 6);
-  peerInfo.channel = 0;
+  peerInfo.channel = espNowChannel;
   peerInfo.encrypt = false;
 
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
