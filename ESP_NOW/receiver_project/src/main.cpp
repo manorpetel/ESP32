@@ -10,10 +10,8 @@ void OnDataRecv(const uint8_t *macAddr, const uint8_t *incomingData, int len) {
   snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
            macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
 
-  String message = "";
-  for (int i = 0; i < len; i++) {
-    message += (char)incomingData[i];
-  }
+  String message = String((const char *)incomingData, len);
+  message.trim();
 
   Serial.print("Received from ");
   Serial.print(macStr);

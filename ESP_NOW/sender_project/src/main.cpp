@@ -63,9 +63,9 @@ void loop() {
         Serial.print("Sending: ");
         Serial.println(inputBuffer);
 
-        uint8_t payload[inputBuffer.length() + 1];
-        strcpy((char *)payload, inputBuffer.c_str());
-        esp_now_send(peerAddress, payload, inputBuffer.length() + 1);
+        uint8_t payload[inputBuffer.length()];
+        memcpy(payload, inputBuffer.c_str(), inputBuffer.length());
+        esp_now_send(peerAddress, payload, inputBuffer.length());
       } else {
         Serial.println("Please type HIGH or LOW.");
       }
