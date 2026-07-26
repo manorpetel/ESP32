@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 
 constexpr uint8_t espNowChannel = 1;
 
@@ -36,7 +37,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);
   WiFi.setSleep(false);
-  WiFi.setChannel(espNowChannel);
+  esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
 
   Serial.print("Receiver MAC: ");
   Serial.println(WiFi.macAddress());
