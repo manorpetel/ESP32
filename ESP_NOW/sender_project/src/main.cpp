@@ -4,7 +4,7 @@
 #include <esp_wifi.h>
 
 // Use the receiver's MAC address for a direct ESP-NOW peer.
-constexpr uint8_t peerAddress[] = {0x68, 0x09, 0x47, 0x57, 0xD8, 0xBC};
+constexpr uint8_t peerAddress[] = {0x8C, 0x94, 0xDF, 0x70, 0xD4, 0x9C};
 constexpr uint8_t espNowChannel = 1;
 
 void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
@@ -25,10 +25,15 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  Serial.println("=== SENDER DEBUG START ===");
+
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);
   WiFi.setSleep(false);
-  esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
+  
+  // Start WiFi radio (required before setting channel)
+  WiFi.begin();
+  delay(100);
 
   String localMac = WiFi.macAddress();
   Serial.print("Sender MAC: ");
@@ -62,6 +67,11 @@ void setup() {
   } else {
     Serial.println("Peer added successfully!");
   }
+
+  // Now set channel AFTER esp_now_init()
+  esp_err_t chResult = esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
+  Serial.print("esp_wifi_set_channel result: ");
+  Serial.println(chResult);
 
   Serial.println("Sender ready");
   Serial.println("Type HIGH or LOW and press Enter.");

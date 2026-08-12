@@ -73,22 +73,30 @@ void setup() {
   WiFi.setSleep(false);
   Serial.println("4) WiFi sleep disabled");
 
-  esp_err_t chResult = esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
-  Serial.print("5) esp_wifi_set_channel result: ");
-  Serial.println(chResult);
+  // Start WiFi radio (required before setting channel)
+  WiFi.begin();
+  delay(100);
+  Serial.println("4b) WiFi radio started");
 
   String localMac = WiFi.macAddress();
-  Serial.print("6) Receiver MAC: ");
+  Serial.print("5) Receiver MAC: ");
   Serial.println(localMac);
 
   esp_err_t initResult = esp_now_init();
-  Serial.print("7) esp_now_init() result: ");
+  Serial.print("6) esp_now_init() result: ");
   Serial.println(initResult);
 
   if (initResult != ESP_OK) {
     Serial.println("ERROR: ESP-NOW init failed");
     return;
   }
+
+  Serial.println("DEBUG_FIX_APPLIED: About to call esp_wifi_set_channel()");
+  Serial.println("DEBUG_FIX_APPLIED: Order is NOW: esp_now_init BEFORE esp_wifi_set_channel");
+  
+  esp_err_t chResult = esp_wifi_set_channel(espNowChannel, WIFI_SECOND_CHAN_NONE);
+  Serial.print("7) esp_wifi_set_channel result: ");
+  Serial.println(chResult);
 
   esp_err_t regResult = esp_now_register_recv_cb(OnDataRecv);
   Serial.print("8) esp_now_register_recv_cb() result: ");
