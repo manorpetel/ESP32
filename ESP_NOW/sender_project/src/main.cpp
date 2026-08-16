@@ -7,6 +7,14 @@
 constexpr uint8_t peerAddress[] = {0x8C, 0x94, 0xDF, 0x70, 0xD4, 0x9C};
 constexpr uint8_t espNowChannel = 1;
 
+// Button pin definitions
+const int SAFETY_PIN = 32; // GPIO32 -> "safety"
+const int LAUNCH_PIN = 33; // GPIO33 -> "launch"
+
+// Track last known states to detect changes
+int lastSafetyState = HIGH;
+int lastLaunchState = HIGH;
+
 void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
   char macStr[18];
   snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
@@ -21,11 +29,33 @@ void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
   }
 }
 
+// Helper to send a text message via ESP-NOW and print debug
+void sendMessage(const String &msg) {
+  Serial.print("Sending: ");
+  Serial.print(msg);
+  Serial.println(")");
+
+  // Create payload buffer (no null terminator)
+  size_t len = msg.length();
+  uint8_t payload[len];
+  memcpy(payload, msg.c_str(), len);
+
+  esp_err_t result = esp_now_send(peerAddress, payload, len);
+  if (result != ESP_OK) {
+    Serial.print("esp_now_send error: ");
+    Serial.println(result);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
   Serial.println("=== SENDER DEBUG START ===");
+
+  // Configure button pins with internal pull-ups
+  pinMode(SAFETY_PIN, INPUT_PULLUP);
+  pinMode(LAUNCH_PIN, INPUT_PULLUP);
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);
@@ -73,13 +103,23 @@ void setup() {
   Serial.print("esp_wifi_set_channel result: ");
   Serial.println(chResult);
 
+  // Read initial button states
+  lastSafetyState = digitalRead(SAFETY_PIN);
+  lastLaunchState = digitalRead(LAUNCH_PIN);
+
+  Serial.print("Initial Safety state: ");
+  Serial.println(lastSafetyState == LOW ? "PRESSED (LOW)" : "RELEASED (HIGH)");
+  Serial.print("Initial Launch state: ");
+  Serial.println(lastLaunchState == LOW ? "PRESSED (LOW)" : "RELEASED (HIGH)");
+
   Serial.println("Sender ready");
-  Serial.println("Type HIGH or LOW and press Enter.");
+  Serial.println("Ready to get buttons inputs and send messages via ESP-NOW.");
 }
 
 void loop() {
   static String inputBuffer = "";
 
+  // Handle Serial text commands as before
   while (Serial.available() > 0) {
     char c = Serial.read();
 
@@ -87,20 +127,7 @@ void loop() {
       inputBuffer.trim();
 
       if (inputBuffer == "HIGH" || inputBuffer == "LOW") {
-        Serial.print("Sending: ");
-        Serial.print(inputBuffer);
-        Serial.print(" (length: ");
-        Serial.print(inputBuffer.length());
-        Serial.println(")");
-
-        uint8_t payload[inputBuffer.length()];
-        memcpy(payload, inputBuffer.c_str(), inputBuffer.length());
-        
-        esp_err_t result = esp_now_send(peerAddress, payload, inputBuffer.length());
-        if (result != ESP_OK) {
-          Serial.print("esp_now_send error: ");
-          Serial.println(result);
-        }
+        sendMessage(inputBuffer);
       } else if (inputBuffer.length() > 0) {
         Serial.print("Please type HIGH or LOW. You typed: ");
         Serial.println(inputBuffer);
@@ -109,6 +136,45 @@ void loop() {
       inputBuffer = "";
     } else {
       inputBuffer += c;
+    }
+  }
+
+  // Check buttons and send messages on state changes
+  int currentSafety = digitalRead(SAFETY_PIN);
+  if (currentSafety != lastSafetyState) {
+    // Simple debounce: wait and re-read
+    delay(50);
+    currentSafety = digitalRead(SAFETY_PIN);
+    if (currentSafety != lastSafetyState) {
+      lastSafetyState = currentSafety;
+      if (currentSafety == LOW) {
+        // Button pressed -> GPIO goes LOW
+        Serial.println("Safety button pressed -> sending 'Safety Off'");
+        sendMessage("Safety Off");
+      } else {
+        // Button released -> GPIO goes HIGH
+        Serial.println("Safety button released -> sending 'Safety On'");
+        sendMessage("Safety On");
+      }
+    }
+  }
+
+  int currentLaunch = digitalRead(LAUNCH_PIN);
+  if (currentLaunch != lastLaunchState) {
+    // Simple debounce: wait and re-read
+    delay(50);
+    currentLaunch = digitalRead(LAUNCH_PIN);
+    if (currentLaunch != lastLaunchState) {
+      lastLaunchState = currentLaunch;
+      if (currentLaunch == LOW) {
+        // Button pressed -> GPIO goes LOW
+        Serial.println("Launch button pressed -> sending 'Launch On'");
+        sendMessage("Launch On");
+      } else {
+        // Button released -> GPIO goes HIGH
+        Serial.println("Launch button released -> sending 'Launch Off'");
+        sendMessage("Launch Off");
+      }
     }
   }
 
