@@ -14,6 +14,8 @@ const int LAUNCH_PIN = 33; // GPIO33 -> "launch"
 // Track last known states to detect changes
 int lastSafetyState = HIGH;
 int lastLaunchState = HIGH;
+// Track whether a Launch On was sent (so we only send Launch Off if it was active)
+bool launchSent = false;
 
 void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status) {
   char macStr[18];
@@ -155,6 +157,12 @@ void loop() {
         // Button released -> GPIO goes HIGH
         Serial.println("Safety button released -> sending 'Safety On'");
         sendMessage("Safety On");
+        // If safety is re-enabled while a Launch was active, force it off
+        if (launchSent) {
+          Serial.println("Safety re-enabled while Launch was active -> sending 'Launch Off'");
+          sendMessage("Launch Off");
+          launchSent = false;
+        }
       }
     }
   }
@@ -165,16 +173,28 @@ void loop() {
     delay(50);
     currentLaunch = digitalRead(LAUNCH_PIN);
     if (currentLaunch != lastLaunchState) {
-      lastLaunchState = currentLaunch;
+      // Handle press/release based on safety state
       if (currentLaunch == LOW) {
         // Button pressed -> GPIO goes LOW
-        Serial.println("Launch button pressed -> sending 'Launch On'");
-        sendMessage("Launch On");
+        if (currentSafety == LOW) {
+          Serial.println("Launch button pressed -> Safety is OFF -> sending 'Launch On'");
+          sendMessage("Launch On");
+          launchSent = true;
+        } else {
+          Serial.println("Launch button pressed -> Safety is ON -> Launch blocked (no message sent)");
+        }
       } else {
         // Button released -> GPIO goes HIGH
-        Serial.println("Launch button released -> sending 'Launch Off'");
-        sendMessage("Launch Off");
+        if (launchSent) {
+          Serial.println("Launch button released -> sending 'Launch Off'");
+          sendMessage("Launch Off");
+          launchSent = false;
+        } else {
+          Serial.println("Launch button released (no active Launch to turn off)");
+        }
       }
+
+      lastLaunchState = currentLaunch;
     }
   }
 
