@@ -4,6 +4,9 @@
 #include <esp_wifi.h>
 
 constexpr uint8_t espNowChannel = 1;
+// Output pins for receiver actions
+const int SAFETY_OUT_PIN = 14; // GPIO14 -> safety indicator (active LOW when Safety Off)
+const int LAUNCH_OUT_PIN = 27; // GPIO27 -> launch indicator (active LOW when Launch On)
 
 void printMac(const uint8_t *mac) {
   char buf[18];
@@ -21,13 +24,6 @@ void OnDataRecv(const uint8_t *macAddr, const uint8_t *incomingData, int len) {
   Serial.print("Source MAC: ");
   printMac(macAddr);
 
-  Serial.print("Raw bytes: ");
-  for (int i = 0; i < len; i++) {
-    Serial.print((char)incomingData[i]);
-    Serial.print(" ");
-  }
-  Serial.println();
-
   // Convert data to string
   String message = "";
   for (int i = 0; i < len; i++) {
@@ -38,22 +34,32 @@ void OnDataRecv(const uint8_t *macAddr, const uint8_t *incomingData, int len) {
   Serial.print(message);
   Serial.println("\"");
 
-  if (message == "HIGH") {
-    digitalWrite(LED_BUILTIN, HIGH);
-    Serial.println("MATCH: message == HIGH");
-  } else if (message == "LOW") {
-    digitalWrite(LED_BUILTIN, LOW);
-    Serial.println("MATCH: message == LOW");
+  // React to named messages and drive outputs accordingly
+  if (message == "Safety Off") {
+    digitalWrite(SAFETY_OUT_PIN, LOW); // active LOW to indicate Safety is OFF
+    Serial.println("ACTION: Safety OFF -> GPIO14 LOW");
+  } else if (message == "Safety On") {
+    digitalWrite(SAFETY_OUT_PIN, HIGH);
+    Serial.println("ACTION: Safety ON -> GPIO14 HIGH");
+  } else if (message == "Launch On") {
+    digitalWrite(LAUNCH_OUT_PIN, LOW); // active LOW to indicate Launch is ON
+    Serial.println("ACTION: Launch ON -> GPIO27 LOW");
+  } else if (message == "Launch Off") {
+    digitalWrite(LAUNCH_OUT_PIN, HIGH);
+    Serial.println("ACTION: Launch OFF -> GPIO27 HIGH");
   } else {
-    Serial.println("NO MATCH: message is not HIGH or LOW");
+    Serial.println("NO ACTION: message not recognized");
   }
 
   Serial.println("========================================");
 }
 
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  // Configure output pins and default them HIGH (inactive)
+  pinMode(SAFETY_OUT_PIN, OUTPUT);
+  pinMode(LAUNCH_OUT_PIN, OUTPUT);
+  digitalWrite(SAFETY_OUT_PIN, HIGH);
+  digitalWrite(LAUNCH_OUT_PIN, HIGH);
 
   Serial.begin(115200);
   delay(1000);
@@ -103,7 +109,7 @@ void setup() {
   Serial.println(regResult);
 
   Serial.println("9) Receiver ready");
-  Serial.println("Waiting for HIGH/LOW ESP-NOW messages...");
+  Serial.println("Waiting for Safety/Launch ESP-NOW messages...");
 }
 
 void loop() {
